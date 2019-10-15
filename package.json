@@ -1,0 +1,44 @@
+{
+  "name": "xwebjs-cli",
+  "version": "1.0.0",
+  "description": "command line for xwebjs",
+  "main": "./bin/command.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xwebjs/xwebjs-cli.git"
+  },
+  "keywords": [
+    "xwebjs",
+    "command",
+    "line"
+  ],
+  "dependencies": {
+    "chalk": "^2.4.2",
+    "colors": "^1.4.0",
+    "combined-stream2": "^1.1.2",
+    "commander": "^3.0.2",
+    "didyoumean": "^1.2.1",
+    "inquirer": "^7.0.0",
+    "interpret": "^1.1.0",
+    "liftoff": "^3.1.0",
+    "minimist": "^1.2.0",
+    "recursive-readdir": "^2.2.2",
+    "v8flags": "^3.0.1",
+    "yargs": "^7.1.0"
+  },
+  "bin": {
+    "xwebjs": "./bin/command.js"
+  },
+  "author": "Nick Li",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/xwebjs/xwebjs-cli/issues"
+  },
+  "homepage": "https://github.com/xwebjs/xwebjs-cli#readme",
+  "devDependencies": {
+    "bach": "^1.2.0"
+  }
+}
