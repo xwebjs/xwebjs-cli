@@ -1,4 +1,7 @@
 {
+  "category": "test",
+  "package": "x",
+  "version": "1.0",
   "dependencies": {
     "core": {
       "version": "1.0"
