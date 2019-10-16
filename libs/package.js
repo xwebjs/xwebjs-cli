@@ -1,12 +1,13 @@
 const fs = require('fs')
 const bach = require('bach')
 const recursive = require('recursive-readdir')
-const path = require('path')
+const Path = require('path')
 const CombinedStream = require('combined-stream2')
 const stream = require('stream')
+const minifyStream = require('minify-stream')
 
-const targetMainSrc = './src/main/js'
-const targetDestFolder = './target/main/js'
+const targetMainSrc = './src/main/js/'
+const targetDestFolder = './target/main/js/'
 
 function package () {
   let fileContents
@@ -20,9 +21,13 @@ function package () {
       for (const file of files) {
         let passThrough = new stream.PassThrough()
         combinedStream.append(passThrough)
-        passThrough.write("\n---------\n")
+        passThrough.write(generateModuleSeparator(file))
         passThrough.end()
-        combinedStream.append(fs.createReadStream(file))
+        combinedStream.append(
+          fs.createReadStream(file).pipe(
+            minifyStream({ sourceMap: false })
+          )
+        )
       }
       if (!fs.existsSync(targetDestFolder)) {
         fs.mkdirSync(targetDestFolder, {
@@ -30,8 +35,19 @@ function package () {
         })
       }
       combinedStream.pipe(fs.createWriteStream(getFilePath().libFile))
+
     })
   }
+}
+
+function generateModuleSeparator (path) {
+  let start = '\n[======================='
+  let end = '=======================]\n'
+  let package = 'p#' + Path.dirname(path).replace(
+    targetMainSrc.substring(2, targetMainSrc.length) + '/', ''
+  ).replace(Path.sep, '.') + ';'
+  let moduleName = 'm#' + Path.basename(path).replace('.js', '')
+  return start + package + moduleName + end
 }
 
 function getConfig () {
