@@ -5,9 +5,18 @@ const Path = require('path')
 const CombinedStream = require('combined-stream2')
 const stream = require('stream')
 const minifyStream = require('minify-stream')
+const _ = require('lodash')
 
 const targetMainSrc = './src/main/js/'
 const targetDestFolder = './target/main/js/'
+
+const meta = {
+  modules: [],
+  moduleNum: 0,
+  fileSize: 0,
+  groupId: '',
+  artifactId: ''
+}
 
 function package () {
   let fileContents
@@ -19,6 +28,9 @@ function package () {
       // `files` is an array of file paths
       console.log(files)
       for (const file of files) {
+        meta.moduleNum++
+        let moduleInfo = getModuleInfo(file)
+        meta.modules.push(moduleInfo)
         let passThrough = new stream.PassThrough()
         combinedStream.append(passThrough)
         passThrough.write(generateModuleSeparator(file))
@@ -34,8 +46,17 @@ function package () {
           recursive: true
         })
       }
-      combinedStream.pipe(fs.createWriteStream(getFilePath().libFile))
-
+      combinedStream.pipe(
+        fs.createWriteStream(getFilePath().libFile).on(
+          'finish',
+          function () {
+            let stat = fs.statSync(getFilePath().libFile, 'utf8')
+            meta.fileSize = stat.size
+            _.assign(meta, _.pick(getConfig(), ['groupId', 'artifactId']))
+            fs.writeFileSync(getFilePath().metaFile, JSON.stringify(meta))
+          }
+        )
+      )
     })
   }
 }
@@ -43,11 +64,17 @@ function package () {
 function generateModuleSeparator (path) {
   let start = '\n[======================='
   let end = '=======================]\n'
-  let package = 'p#' + Path.dirname(path).replace(
-    targetMainSrc.substring(2, targetMainSrc.length) + '/', ''
-  ).replace(Path.sep, '.') + ';'
-  let moduleName = 'm#' + Path.basename(path).replace('.js', '')
+  let moduleInfo = getModuleInfo(path)
+  let package = 'p#' + moduleInfo.package + ';'
+  let moduleName = 'm#' + moduleInfo.module
   return start + package + moduleName + end
+}
+
+function getModuleInfo (path) {
+  return {
+    package: Path.dirname(path).replace(targetMainSrc.substring(2, targetMainSrc.length), '').replace(Path.sep, '.'),
+    module: Path.basename(path).replace('.js', '')
+  }
 }
 
 function getConfig () {
@@ -59,8 +86,8 @@ function getConfig () {
 function getFilePath () {
   let config = getConfig()
   return {
-    libFile: targetDestFolder + config.package + '-' + config.version + '.lib',
-    metaFile: config.package + '-' + config.version + '.meta'
+    libFile: targetDestFolder + config.artifactId + '-' + config.version + '.xlib',
+    metaFile: targetDestFolder + config.artifactId + '-' + config.version + '.xmeta'
   }
 }
 

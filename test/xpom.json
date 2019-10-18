@@ -1,6 +1,6 @@
 {
-  "category": "test",
-  "package": "x",
+  "groupId": "test",
+  "artifactId": "x",
   "version": "1.0",
   "dependencies": {
     "core": {
