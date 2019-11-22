@@ -4,7 +4,7 @@
   "description": "command line for xwebjs",
   "main": "src/main/js/bin/command.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "./node_modules/jasmine/bin/jasmine.js --config=test/jasmine.json"
   },
   "repository": {
     "type": "git",
@@ -25,6 +25,7 @@
     "gulp-uglify": "^3.0.2",
     "inquirer": "^7.0.0",
     "interpret": "^1.1.0",
+    "jasmine-node": "^3.0.0",
     "liftoff": "^3.1.0",
     "lodash": "^4.17.15",
     "minify-stream": "^1.2.0",
@@ -45,6 +46,7 @@
   },
   "homepage": "https://github.com/xwebjs/xwebjs-cli#readme",
   "devDependencies": {
-    "bach": "^1.2.0"
+    "bach": "^1.2.0",
+    "jasmine": "^3.5.0"
   }
 }

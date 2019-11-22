@@ -1,0 +1,10 @@
+{
+  "groupId": "test",
+  "artifactId": "app",
+  "version": "1.0",
+  "dependencies": {
+    "core": {
+      "version": "1.0"
+    }
+  }
+}

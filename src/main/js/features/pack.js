@@ -8,8 +8,10 @@ const stream = require('stream')
 const minifyStream = require('minify-stream')
 const _ = require('lodash')
 
-const targetMainSrc = './src/main/js/'
-const targetDestFolder = './target/main/js/'
+const targetMainSrc = 'src/main/js'
+const targetDestFolder = 'target/main/js'
+// warning, should not hard file sep
+const fileSepRegExp = new RegExp('\/', 'g')
 
 const meta = {
   modules: [],
@@ -32,52 +34,64 @@ function clean () {
   )
 }
 
-function pack () {
-  let fileContents
-  process.cwd()
-  console.log('cleaning target folder:' + targetDestFolder)
-  clean().then(
-    function () {
-      if (fs.existsSync(targetMainSrc)) {
-        let combinedStream = CombinedStream.create()
-        recursive(targetMainSrc, function (err, files) {
-          // `files` is an array of file paths
-          console.log(files)
-          for (const file of files) {
-            meta.moduleNum++
-            let moduleInfo = getModuleInfo(file)
-            meta.modules.push(moduleInfo)
-            let passThrough = new stream.PassThrough()
-            combinedStream.append(passThrough)
-            passThrough.write(generateModuleSeparator(file))
-            passThrough.end()
-            combinedStream.append(
-              fs.createReadStream(file).pipe(
-                minifyStream({ sourceMap: false })
+async function pack (relativePath) {
+  try {
+    return await new Promise((resolve, reject) => {
+      if (relativePath !== undefined) {
+        process.chdir(relativePath)
+      }
+      console.log('The current directory:' + process.cwd())
+      console.log('Cleaning target folder:' + targetDestFolder)
+      clean().then(
+        function () {
+          if (fs.existsSync(targetMainSrc)) {
+            let combinedStream = CombinedStream.create()
+            let totalFileNum = 0
+            console.log('scanning the directories')
+            recursive(targetMainSrc, function (err, files) {
+              // `files` is an array of file paths
+              console.log(files)
+              totalFileNum = files.length
+              console.log('Total files number:' + totalFileNum)
+              for (const file of files) {
+                meta.moduleNum++
+                let moduleInfo = getModuleInfo(file)
+                meta.modules.push(moduleInfo)
+                let passThrough = new stream.PassThrough()
+                combinedStream.append(passThrough)
+                passThrough.write(generateModuleSeparator(file))
+                passThrough.end()
+                combinedStream.append(
+                  fs.createReadStream(file).pipe(
+                    minifyStream({ sourceMap: false })
+                  )
+                )
+              }
+              if (!fs.existsSync(targetDestFolder)) {
+                fs.mkdirSync(targetDestFolder, {
+                  recursive: true
+                })
+              }
+              combinedStream.pipe(
+                fs.createWriteStream(getFilePath().libFile).on(
+                  'finish',
+                  function () {
+                    let stat = fs.statSync(getFilePath().libFile, 'utf8')
+                    meta.fileSize = stat.size
+                    _.assign(meta, _.pick(getConfig(), ['groupId', 'artifactId', 'version']))
+                    fs.writeFileSync(getFilePath().metaFile, JSON.stringify(meta))
+                    resolve()
+                  }
+                )
               )
-            )
-          }
-          if (!fs.existsSync(targetDestFolder)) {
-            fs.mkdirSync(targetDestFolder, {
-              recursive: true
             })
           }
-          combinedStream.pipe(
-            fs.createWriteStream(getFilePath().libFile).on(
-              'finish',
-              function () {
-                let stat = fs.statSync(getFilePath().libFile, 'utf8')
-                meta.fileSize = stat.size
-                _.assign(meta, _.pick(getConfig(), ['groupId', 'artifactId', 'version']))
-                fs.writeFileSync(getFilePath().metaFile, JSON.stringify(meta))
-              }
-            )
-          )
-        })
-      }
-    }
-  )
-  console.log('scanning the directories')
+        }
+      )
+    })
+  } catch {
+    throw new Error('Failed to pack')
+  }
 }
 
 function generateModuleSeparator (path) {
@@ -90,9 +104,18 @@ function generateModuleSeparator (path) {
 }
 
 function getModuleInfo (path) {
+  let packPath, modulePath
+  packPath = Path.dirname(path)
+  .replace(targetMainSrc, '')
+  .replace(fileSepRegExp, '.')
+  if (packPath.startsWith('.')) {
+    packPath = packPath.substring(1, packPath.length)
+  }
+  modulePath = Path.basename(path)
+  .replace('.js', '')
   return {
-    pack: Path.dirname(path).replace(targetMainSrc.substring(2, targetMainSrc.length), '').replace(Path.sep, '.'),
-    module: Path.basename(path).replace('.js', '')
+    pack: packPath,
+    module: modulePath
   }
 }
 
@@ -105,8 +128,8 @@ function getConfig () {
 function getFilePath () {
   let config = getConfig()
   return {
-    libFile: targetDestFolder + config.artifactId + '-' + config.version + '.xlib',
-    metaFile: targetDestFolder + config.artifactId + '-' + config.version + '.xmeta'
+    libFile: targetDestFolder + Path.sep + config.artifactId + '-' + config.version + '.xlib',
+    metaFile: targetDestFolder + Path.sep + config.artifactId + '-' + config.version + '.xmeta'
   }
 }
 
