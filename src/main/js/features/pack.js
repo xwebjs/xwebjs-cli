@@ -25,7 +25,7 @@ function clean () {
   return fsExtra.pathExists(targetDestFolder)
   .then(exists => {
     if (exists) {
-      fsExtra.emptyDir(targetDestFolder)
+      fsExtra.emptyDirSync(targetDestFolder)
     }
   }).catch(
     function (err) {
@@ -53,6 +53,10 @@ async function pack (relativePath) {
               console.log(files)
               totalFileNum = files.length
               console.log('Total files number:' + totalFileNum)
+              if (totalFileNum === 0) {
+                reject("No module file found")
+                return
+              }
               for (const file of files) {
                 meta.moduleNum++
                 let moduleInfo = getModuleInfo(file)
@@ -89,8 +93,8 @@ async function pack (relativePath) {
         }
       )
     })
-  } catch {
-    throw new Error('Failed to pack')
+  } catch (e) {
+    throw new Error('Failed to pack:' + e)
   }
 }
 
