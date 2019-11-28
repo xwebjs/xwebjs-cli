@@ -99,8 +99,8 @@ async function pack (relativePath) {
 }
 
 function generateModuleSeparator (path) {
-  let start = '\n[======================='
-  let end = '=======================]\n'
+  let start = '[======================='
+  let end = '=======================]'
   let moduleInfo = getModuleInfo(path)
   let pack = 'p#' + moduleInfo.pack + ';'
   let moduleName = 'm#' + moduleInfo.module
