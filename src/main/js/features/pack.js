@@ -7,19 +7,12 @@ const CombinedStream = require('combined-stream2')
 const stream = require('stream')
 const minifyStream = require('minify-stream')
 const _ = require('lodash')
+const esprima = require('esprima')
 
 const targetMainSrc = 'src/main/js'
 const targetDestFolder = 'target/main/js'
 // warning, should not hard file sep
 const fileSepRegExp = new RegExp('\/', 'g')
-
-const meta = {
-  modules: [],
-  moduleNum: 0,
-  fileSize: 0,
-  groupId: '',
-  artifactId: ''
-}
 
 function clean () {
   return fsExtra.pathExists(targetDestFolder)
@@ -35,61 +28,133 @@ function clean () {
 }
 
 async function pack (relativePath) {
+  return grabModules(relativePath)
+  .then(
+    function (modules) {
+      return optimizeOrder(modules)
+    }
+  ).then(
+    function (modules) {
+      return packageModules(relativePath, modules)
+    }
+  )
+}
+
+async function grabModules (relativePath) {
+  try {
+    return await new Promise((resolve, reject) => {
+        let modules = []
+        let totalFileNum = 0
+        if (relativePath !== undefined) {
+          process.chdir(relativePath)
+        }
+        if (!fs.existsSync(targetMainSrc)) {
+          reject('Main source folder doesn\'t exist:' + targetMainSrc)
+        }
+        console.log('Scanning the directories recursively')
+        recursive(targetMainSrc, function (err, files) {
+            totalFileNum = files.length
+            console.log('Total files number:' + totalFileNum)
+            if (totalFileNum === 0) {
+              reject('No module file found')
+            }
+            for (const filePath of files) {
+              modules.push(
+                {
+                  info: getModuleInfo(filePath),
+                  dependencies: getModuleDependencies(filePath),
+                  filePath: filePath
+                }
+              )
+            }
+            resolve(modules)
+          }
+        )
+      }
+    )
+  } catch (e) {
+    throw new Error('Failed to pack:' + e)
+  }
+}
+
+function optimizeOrder (modules) {
+  let exportedModules = []
+  appendModule(exportedModules, modules, modules)
+  return exportedModules
+}
+
+function appendModule (expModules, modules, oModules) {
+  let childModules = []
+  _.forEach(modules,
+    function (module, index) {
+      if (_.includes(expModules, module)) {
+        return
+      }
+      if (!_.isEmpty(module.dependencies)) {
+        _.forEach(module.dependencies,
+          function (depModuleFullPath, index) {
+            let depModule = _.find(oModules, function (oModule) {
+              return oModule.info.fullPath === depModuleFullPath
+            })
+            if (!_.isEmpty(depModule)) {
+              childModules.push(depModule)
+            }
+          }
+        )
+        appendModule(expModules, childModules, oModules)
+      }
+      expModules.push(module)
+    }
+  )
+}
+
+async function packageModules (relativePath, modules) {
   try {
     return await new Promise((resolve, reject) => {
       if (relativePath !== undefined) {
         process.chdir(relativePath)
       }
-      console.log('The current directory:' + process.cwd())
-      console.log('Cleaning target folder:' + targetDestFolder)
       clean().then(
         function () {
-          if (fs.existsSync(targetMainSrc)) {
-            let combinedStream = CombinedStream.create()
-            let totalFileNum = 0
-            console.log('scanning the directories')
-            recursive(targetMainSrc, function (err, files) {
-              // `files` is an array of file paths
-              console.log(files)
-              totalFileNum = files.length
-              console.log('Total files number:' + totalFileNum)
-              if (totalFileNum === 0) {
-                reject("No module file found")
-                return
-              }
-              for (const file of files) {
-                meta.moduleNum++
-                let moduleInfo = getModuleInfo(file)
-                meta.modules.push(moduleInfo)
-                let passThrough = new stream.PassThrough()
-                combinedStream.append(passThrough)
-                passThrough.write(generateModuleSeparator(file))
-                passThrough.end()
-                combinedStream.append(
-                  fs.createReadStream(file).pipe(
-                    minifyStream({ sourceMap: false })
-                  )
-                )
-              }
-              if (!fs.existsSync(targetDestFolder)) {
-                fs.mkdirSync(targetDestFolder, {
-                  recursive: true
-                })
-              }
-              combinedStream.pipe(
-                fs.createWriteStream(getFilePath().libFile).on(
-                  'finish',
-                  function () {
-                    let stat = fs.statSync(getFilePath().libFile, 'utf8')
-                    meta.fileSize = stat.size
-                    _.assign(meta, _.pick(getConfig(), ['groupId', 'artifactId', 'version']))
-                    fs.writeFileSync(getFilePath().metaFile, JSON.stringify(meta))
-                    resolve()
-                  }
-                )
+          let meta = {
+            modules: [],
+            moduleNum: 0,
+            fileSize: 0,
+            groupId: '',
+            artifactId: ''
+          }
+          let combinedStream = CombinedStream.create()
+          for (const module of modules) {
+            let file = module.filePath
+            console.log('Append file:' + file)
+            meta.modules.push(module.info)
+            let passThrough = new stream.PassThrough()
+            combinedStream.append(passThrough)
+            passThrough.write(generateModuleSeparator(module.info))
+            passThrough.end()
+            combinedStream.append(
+              fs.createReadStream(file).pipe(
+                minifyStream({ sourceMap: false })
               )
+            )
+          }
+          if (!fs.existsSync(targetDestFolder)) {
+            fs.mkdirSync(targetDestFolder, {
+              recursive: true
             })
           }
+          combinedStream.pipe(
+            fs.createWriteStream(getFilePath().libFile).on(
+              'finish',
+              function () {
+                let stat = fs.statSync(getFilePath().libFile, 'utf8')
+                meta.fileSize = stat.size
+                _.assign(meta, _.pick(getConfig(), ['groupId', 'artifactId', 'version']))
+                fs.writeFileSync(getFilePath().metaFile, JSON.stringify(meta))
+                resolve()
+              }
+            )
+          )
         }
       )
     })
@@ -98,10 +163,10 @@ async function pack (relativePath) {
   }
 }
 
-function generateModuleSeparator (path) {
-  let start = '[======================='
-  let end = '=======================]'
-  let moduleInfo = getModuleInfo(path)
+function generateModuleSeparator (info) {
+  let start = '\n//@moduleInfo('
+  let end = ')\n'
+  let moduleInfo = info
   let pack = 'p#' + moduleInfo.pack + ';'
   let moduleName = 'm#' + moduleInfo.module
   return start + pack + moduleName + end
@@ -119,7 +184,26 @@ function getModuleInfo (path) {
   .replace('.js', '')
   return {
     pack: packPath,
-    module: modulePath
+    module: modulePath,
+    fullPath: (!_.isEmpty(packPath) ? packPath + '.' : '') + modulePath
+  }
+}
+
+function getModuleDependencies (path) {
+  let dependencies = []
+  let moduleContent = fs.readFileSync(path, 'utf8')
+  let syntaxTree = esprima.parseScript(moduleContent)
+  // parsing depends on the position of the property imports as the first one
+  try {
+    let elements = syntaxTree.body[0].expression.arguments[0].properties[0].value.elements
+    _.forEach(elements,
+      function (dependency, index) {
+        dependencies.push(dependency.value)
+      }
+    )
+    return dependencies
+  } catch (e) {
+    throw new Error('Failed to get module dependencies information caused by:' + e)
   }
 }
 
