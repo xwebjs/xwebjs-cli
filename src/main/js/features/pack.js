@@ -1,11 +1,11 @@
 const fs = require('fs')
-const bach = require('bach')
 const recursive = require('recursive-readdir')
 const fsExtra = require('fs-extra')
 const Path = require('path')
 const CombinedStream = require('combined-stream2')
 const stream = require('stream')
 const minifyStream = require('minify-stream')
+const replaceStream = require('stream-replace')
 const _ = require('lodash')
 const esprima = require('esprima')
 
@@ -134,14 +134,13 @@ async function packageModules (relativePath, modules) {
             passThrough.end()
             combinedStream.append(
               fs.createReadStream(file).pipe(
+                replaceStream(
+                  /_x\.exportModule\(/g, '_x\.exportModule(\'' + module.info.fullPath + '\','
+                )
+              ).pipe(
                 minifyStream({ sourceMap: false })
               )
             )
-          }
-          if (!fs.existsSync(targetDestFolder)) {
-            fs.mkdirSync(targetDestFolder, {
-              recursive: true
-            })
           }
           combinedStream.pipe(
             fs.createWriteStream(getFilePath().libFile).on(
@@ -155,6 +154,11 @@ async function packageModules (relativePath, modules) {
               }
             )
           )
+          if (!fs.existsSync(targetDestFolder)) {
+            fs.mkdirSync(targetDestFolder, {
+              recursive: true
+            })
+          }
         }
       )
     })
