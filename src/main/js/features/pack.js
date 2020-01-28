@@ -138,7 +138,7 @@ async function packageModules (relativePath, modules) {
                   /_x\.exportModule\(/g, '_x\.exportModule(\'' + module.info.fullPath + '\','
                 )
               ).pipe(
-                minifyStream({ sourceMap: false })
+                minifyStream({ sourceMap: false, mangle: false })
               )
             )
           }
