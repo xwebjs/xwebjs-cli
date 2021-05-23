@@ -53,10 +53,14 @@ async function grabModules (relativePath) {
         }
         console.log('Scanning the directories recursively')
         recursive(targetMainSrc, function (err, files) {
-            totalFileNum = files.length
+            totalFileNum = 0
+            if (!_.isUndefined(files)) {
+              totalFileNum = files.length
+            }
             console.log('Total files number:' + totalFileNum)
             if (totalFileNum === 0) {
               reject('No module file found')
+              return;
             }
             for (const filePath of files) {
               modules.push(

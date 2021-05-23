@@ -8,9 +8,12 @@ didYouMean.threshold = 0.6
 program
 .command('package')
 .action(
-  function () {
-    console.log('calling package command')
-    pack()
+  function (relativePath) {
+        pack(relativePath).catch(
+          function (error) {
+            process.exitCode = 2
+          }
+        )
   }
 )
 program
